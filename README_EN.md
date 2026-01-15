@@ -192,6 +192,8 @@ print(response.choices[0].message.content)
         - **New Portuguese Support (#691)**: Thanks to @darkmathew for the contribution, Portuguese (Brazil) localization is now supported.
         - **Proxy Monitor Enhancement (#676)**: Added "Copy" buttons for request and response payloads in the proxy monitor details page, with support for automatic JSON formatting.
         - **i18n Fixes (#671)**: Corrected misplaced translation keys in Japanese (ja) and Turkish (tr).
+        - **Global HTTP API (#696)**: Added a local HTTP server port (default 19527), allowing external tools (like VS Code extensions) to switch accounts, refresh quotas, and bind devices directly via API.
+        - **Proxy Monitor Upgrade (#704)**: Completely refactored the monitor dashboard with backend pagination (supporting search filters), resolving UI lag caused by massive logs; exposed `GET /logs` endpoint for external access.
     *   **v3.3.32 (2026-01-15)**:
         - **Core Scheduling & Stability Optimization (Fix Issue #630, #631 - Special Thanks to @lbjlaq PR #640)**:
             - **Quota Vulnerability & Bypass Fix**: Resolved potential vulnerabilities where quota protection mechanisms could be bypassed under high concurrency or specific retry scenarios.
