@@ -71,6 +71,22 @@ pub async fn handle_chat_completions(
     State(state): State<AppState>,
     Json(mut body): Json<Value>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    // [NEW] 将 developer 角色替换为 system (OpenAI 兼容)
+    if let Some(messages) = body.get_mut("messages").and_then(|v| v.as_array_mut()) {
+        for msg in messages.iter_mut() {
+            if msg.get("role").and_then(|v| v.as_str()) == Some("developer") {
+                msg["role"] = json!("system");
+            }
+        }
+    }
+    if let Some(input) = body.get_mut("input").and_then(|v| v.as_array_mut()) {
+        for item in input.iter_mut() {
+            if item.get("role").and_then(|v| v.as_str()) == Some("developer") {
+                item["role"] = json!("system");
+            }
+        }
+    }
+
     // [NEW] 自动检测并转换 Responses 格式
     // 如果请求包含 instructions 或 input 但没有 messages，则认为是 Responses 格式
     let is_responses_format = !body.get("messages").is_some() 
@@ -391,6 +407,22 @@ pub async fn handle_completions(
         body
     );
 
+    // [NEW] 将 developer 角色替换为 system (OpenAI 兼容)
+    if let Some(messages) = body.get_mut("messages").and_then(|v| v.as_array_mut()) {
+        for msg in messages.iter_mut() {
+            if msg.get("role").and_then(|v| v.as_str()) == Some("developer") {
+                msg["role"] = json!("system");
+            }
+        }
+    }
+    if let Some(input) = body.get_mut("input").and_then(|v| v.as_array_mut()) {
+        for item in input.iter_mut() {
+            if item.get("role").and_then(|v| v.as_str()) == Some("developer") {
+                item["role"] = json!("system");
+            }
+        }
+    }
+
     let is_codex_style = body.get("input").is_some() || body.get("instructions").is_some();
 
     // 1. Convert Payload to Messages (Shared Chat Format)
@@ -643,25 +675,25 @@ pub async fn handle_completions(
     // [Fix Phase 2] Backport normalization logic from handle_chat_completions
     // Handle "instructions" + "input" (Codex style) -> system + user messages
     // This is critical because `transform_openai_request` expects `messages` to be populated.
-    
+
     // 1. If we have instructions/input, regardless of messages (which might be empty), force normalization.
     // Logic: if instructions OR input exists, we prefer creating messages from them.
     let has_codex_fields = body.get("instructions").is_some() || body.get("input").is_some();
     if has_codex_fields {
         tracing::debug!("[Codex] Detected Codex-style request (force normalization)");
-        
+
         let mut messages = Vec::new();
-        
+
         // instructions -> system message
         if let Some(inst) = body.get("instructions").and_then(|v| v.as_str()) {
             if !inst.is_empty() {
                 messages.push(json!({
                     "role": "system",
-                    "content": inst 
+                    "content": inst
                 }));
             }
         }
-        
+
         // input -> user message
         if let Some(input) = body.get("input") {
              // Handle array or string input
@@ -673,7 +705,7 @@ pub async fn handle_completions(
             } else {
                 input.to_string()
             };
-            
+
             if !content.is_empty() {
                 messages.push(json!({
                     "role": "user",
@@ -681,7 +713,7 @@ pub async fn handle_completions(
                 }));
             }
         }
-        
+
         if let Some(obj) = body.as_object_mut() {
             tracing::debug!("[Codex] Injecting normalized messages: {} messages", messages.len());
             obj.insert("messages".to_string(), json!(messages));
@@ -738,7 +770,7 @@ pub async fn handle_completions(
         // [New] 使用 TokenManager 内部逻辑提取 session_id，支持粘性调度
         let session_id_str = SessionManager::extract_openai_session_id(&openai_req);
         let session_id = Some(session_id_str.as_str());
-        
+
         // 重试时强制轮换，除非只是简单的网络抖动但 Claude 逻辑里 attempt > 0 总是 force_rotate
         let force_rotate = attempt > 0;
 
@@ -752,7 +784,7 @@ pub async fn handle_completions(
                     ))
                 }
             };
-        
+
         last_email = Some(email.clone());
 
         info!("✓ Using account: {} (type: {})", email, config.request_type);
@@ -760,7 +792,7 @@ pub async fn handle_completions(
         let gemini_body = transform_openai_request(&openai_req, &project_id, &mapped_model);
 
         // [New] 打印转换后的报文 (Gemini Body) 供调试 (Codex 路径) ———— 缩减为 simple debug
-        debug!("[Codex-Request] Transformed Gemini Body ({} parts)", 
+        debug!("[Codex-Request] Transformed Gemini Body ({} parts)",
            gemini_body.get("contents").and_then(|c| c.as_array()).map(|a| a.len()).unwrap_or(0));
 
         let list_response = openai_req.stream;
@@ -866,7 +898,7 @@ pub async fn handle_completions(
 
         // 确定重试策略
         let strategy = determine_retry_strategy(status_code, &error_text);
-        
+
         if apply_retry_strategy(strategy, attempt, status_code, &trace_id).await {
             // 继续重试 (loop 会增加 attempt, 导致 force_rotate=true)
             continue;
